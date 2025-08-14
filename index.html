@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Electricity Bill Splitter</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { padding: 10px; font-size: 14px; }
+    .compact-form .form-control { padding: .4rem .5rem; font-size: .95rem; }
+    .table-sm th, .table-sm td { padding: .4rem; font-size: .95rem; }
+    .bill-bold { font-weight: 700; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Last Month Reading -->
+  <form id="lastBillUnitForm" class="compact-form mb-3">
+    <h6 class="mb-2">Last Month Reading</h6>
+    <div class="row g-2">
+      <div class="col-6"><input type="number" class="form-control" id="last1" placeholder="1RK"></div>
+      <div class="col-6"><input type="number" class="form-control" id="last2" placeholder="1BHK"></div>
+      <div class="col-6"><input type="number" class="form-control" id="last3" placeholder="Common"></div>
+      <div class="col-6"><input type="number" class="form-control" id="last4" placeholder="1st Floor"></div>
+    </div>
+  </form>
+
+  <!-- Current Month Reading -->
+  <form id="billForm" class="compact-form">
+    <h6 class="mb-2">Current Month Reading</h6>
+    <div class="row g-2">
+      <div class="col-6"><input type="number" class="form-control" id="curr1" placeholder="1RK"></div>
+      <div class="col-6"><input type="number" class="form-control" id="curr2" placeholder="1BHK"></div>
+      <div class="col-6"><input type="number" class="form-control" id="curr3" placeholder="Common"></div>
+      <div class="col-6"><input type="number" class="form-control" id="curr4" placeholder="1st Floor"></div>
+    </div>
+    <div class="mt-3">
+      <button type="submit" class="btn btn-primary w-100 btn-sm">Calculate Bill</button>
+    </div>
+  </form>
+
+  <div id="note" class="small text-danger mt-2"></div>
+  <div id="result" class="mt-3"></div>
+</div>
+
+<script>
+// Labels used for display
+const PAYER_LABELS = ["1RK", "1BHK", "1st Floor"];
+
+// Slabs: 0–100 @ ₹5; 101–300 @ ₹11; 301–500 @ ₹15
+const SLABS = [
+  { limit: 100, rate: 5 },
+  { limit: 300, rate: 11 },
+  { limit: 500, rate: 15 }
+];
+
+// Robust equal-per-slab allocator (never produces negative allocations)
+function splitBillEqualAllocation(units, slabs) {
+  const n = units.length;
+  let remaining = units.slice();                 // remaining units per meter
+  let perMeterCost = Array(n).fill(0);
+  let totalBill = 0;
+  const breakdown = [];
+  let prevLimit = 0;
+
+  for (const slab of slabs) {
+    const totalRem = remaining.reduce((a,b)=>a+b,0);
+    if (totalRem <= 0) break;
+
+    const capacity = Math.min(slab.limit - prevLimit, totalRem);
+    if (capacity <= 0) { prevLimit = slab.limit; continue; }
+
+    const alloc = Array(n).fill(0);
+    const costs = Array(n).fill(0);
+
+    // active meters are those with >0 remaining
+    let active = [];
+    for (let i=0;i<n;i++) if (remaining[i] > 1e-9) active.push(i);
+
+    let left = capacity;
+    while (left > 1e-9 && active.length > 0) {
+      const share = left / active.length;
+      for (let i = active.length - 1; i >= 0; i--) {
+        const idx = active[i];
+        const take = Math.min(remaining[idx], share);
+        alloc[idx] += take;
+        remaining[idx] -= take;
+        left -= take;
+        if (remaining[idx] <= 1e-9) active.splice(i, 1);
+      }
+    }
+
+    for (let i=0;i<n;i++) {
+      costs[i] = alloc[i] * slab.rate;
+      perMeterCost[i] += costs[i];
+      totalBill += costs[i];
+    }
+
+    breakdown.push({
+      slab: `${prevLimit + 1}–${slab.limit}`,
+      rate: slab.rate,
+      units: alloc.map(v => +v.toFixed(2)),
+      cost: costs.map(v => +v.toFixed(2))
+    });
+
+    prevLimit = slab.limit;
+  }
+
+  // Round rupees per meter; adjust last to keep exact total
+  const rounded = perMeterCost.map(v => Math.round(v));
+  const diff = Math.round(totalBill) - rounded.reduce((a,b)=>a+b,0);
+  if (rounded.length) rounded[rounded.length - 1] += diff;
+
+  return { perMeter: rounded, totalBill: Math.round(totalBill), breakdown };
+}
+
+document.getElementById("billForm").addEventListener("submit", function(e){
+  e.preventDefault();
+
+  // Read last & current
+  const last = [
+    +document.getElementById("last1").value || 0,
+    +document.getElementById("last2").value || 0,
+    +document.getElementById("last3").value || 0,
+    +document.getElementById("last4").value || 0
+  ];
+  const curr = [
+    +document.getElementById("curr1").value || 0,
+    +document.getElementById("curr2").value || 0,
+    +document.getElementById("curr3").value || 0,
+    +document.getElementById("curr4").value || 0
+  ];
+
+  // Monthly consumption = max(0, current - last), avoids negatives
+  let hadNeg = false;
+  const cons = curr.map((c,i) => {
+    const d = c - last[i];
+    if (d < 0) hadNeg = true;
+    return Math.max(0, d);
+  });
+
+  // Common split into the three paying meters (as units, before slab billing)
+  const commonShare = cons[2] / 3;
+  const payUnits = [
+    cons[0] + commonShare,  // 1RK
+    cons[1] + commonShare,  // 1BHK
+    cons[3] + commonShare   // 1st Floor
+  ];
+
+  // Compute bill
+  const bill = splitBillEqualAllocation(payUnits, SLABS);
+
+  // Top note if any negative delta was clamped
+  document.getElementById("note").textContent = hadNeg
+    ? "Note: Some readings decreased vs last month; negative differences were treated as 0."
+    : "";
+
+  // Build Summary table (shows original, +common, final units, and bold bill)
+  const orig = [cons[0], cons[1], cons[3]];
+  const labels = PAYER_LABELS;
+  let html = `
+    <h6 class="mb-2">Bill Summary</h6>
+    <table class="table table-bordered table-sm text-center align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Meter</th>
+          <th>Orig Units</th>
+          <th>+ Common</th>
+          <th>Total Units</th>
+          <th class="bill-bold">Bill (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${labels.map((lab,i)=>`
+          <tr>
+            <td>${lab}</td>
+            <td>${orig[i].toFixed(2)}</td>
+            <td>${commonShare.toFixed(2)}</td>
+            <td>${payUnits[i].toFixed(2)}</td>
+            <td class="bill-bold">₹${bill.perMeter[i]}</td>
+          </tr>
+        `).join('')}
+        <tr class="table-secondary">
+          <td colspan="3"><strong>Total</strong></td>
+          <td><strong>${payUnits.reduce((a,b)=>a+b,0).toFixed(2)}</strong></td>
+          <td class="bill-bold"><strong>₹${bill.totalBill}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+
+  // Slab-wise breakdown for paying meters
+  html += `
+    <h6 class="mb-2">Slab-wise Breakdown</h6>
+    <table class="table table-bordered table-sm text-center align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Slab</th>
+          <th>Rate (₹/u)</th>
+          ${labels.map(l=>`<th>${l} (U)</th>`).join("")}
+          ${labels.map(l=>`<th>${l} (₹)</th>`).join("")}
+        </tr>
+      </thead>
+      <tbody>
+        ${bill.breakdown.map(r=>`
+          <tr>
+            <td>${r.slab}</td>
+            <td>${r.rate}</td>
+            ${r.units.map(u=>`<td>${u}</td>`).join("")}
+            ${r.cost.map(c=>`<td>${c}</td>`).join("")}
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  document.getElementById("result").innerHTML = html;
+});
+</script>
+</body>
+</html>
