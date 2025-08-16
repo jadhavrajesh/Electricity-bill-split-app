@@ -31,20 +31,41 @@
 
 <body>
   <div class="container">
+    <!-- Slab Charges -->
+    <h6 class="mb-2">Slab Charges</h6>
+    <div class="row g-1 mb-2">
+      <div class="col-4">
+        <label class="form-label">0-100</label>
+        <input type="number" id="slab1" class="form-control" value="4.23" step="0.01">
+      </div>
+      <div class="col-5">
+        <label class="form-label">101-300</label>
+        <input type="number" id="slab2" class="form-control" value="11" step="0.01">
+      </div>
+      <div class="col-3">
+        <label class="form-label">301-500</label>
+        <input type="number" id="slab3" class="form-control" value="15.28" step="0.01">
+      </div>
+    </div>
+
     <!-- Extra Charges -->
     <h6 class="mb-2">Extra Charges</h6>
     <div class="row g-1 mb-2">
-      <div class="col-4">
+      <div class="col-3">
         <label class="form-label">Fixed Charges</label>
-        <input type="number" id="fixedCharges" class="form-control" value="138" step="0.01">
+        <input type="number" id="fixedCharges" class="form-control" value="140" step="0.01">
       </div>
-      <div class="col-5">
-        <label class="form-label">Wheeling (₹/unit)</label>
-        <input type="number" id="wheelingChargesPerUnit" class="form-control" value="1.17" step="0.01">
+      <div class="col-4">
+        <label class="form-label">Wheeling Charges (₹/unit)</label>
+        <input type="number" id="wheelingChargesPerUnit" class="form-control" value="1.47" step="0.01">
       </div>
       <div class="col-3">
-        <label class="form-label">Duty (%)</label>
+        <label class="form-label">Electricity Duty (%)</label>
         <input type="number" id="electricityDutyInPercent" class="form-control" value="16" step="0.01">
+      </div>
+      <div class="col-2">
+        <label class="form-label">Minus Amount</label>
+        <input type="number" id="minusAmount" class="form-control" value="140" step="0.01">
       </div>
     </div>
 
@@ -52,10 +73,21 @@
     <form id="lastBillUnitForm" class="compact-form mb-3">
       <h6 class="mb-2">Last Month Reading</h6>
       <div class="row g-2">
-        <div class="col-3"><input type="number" class="form-control" id="last1" placeholder="1RK"></div>
-        <div class="col-3"><input type="number" class="form-control" id="last2" placeholder="1BHK"></div>
-        <div class="col-3"><input type="number" class="form-control" id="last3" placeholder="Common"></div>
-        <div class="col-3"><input type="number" class="form-control" id="last4" placeholder="1st Floor"></div>
+        <div class="col-3">
+          <label class="form-label">1RK</label>
+          <input type="number" class="form-control" id="last1" placeholder="1RK">
+        </div>
+        <div class="col-3"><label class="form-label">1BHK</label>
+          <input type="number" class="form-control" id="last2" placeholder="1BHK">
+        </div>
+        <div class="col-3">
+          <label class="form-label">Common</label>
+          <input type="number" class="form-control" id="last3" placeholder="Common">
+        </div>
+        <div class="col-3">
+          <label class="form-label">1st Floor</label>
+          <input type="number" class="form-control" id="last4" placeholder="1st Floor">
+        </div>
       </div>
     </form>
 
@@ -63,10 +95,22 @@
     <form id="billForm" class="compact-form">
       <h6 class="mb-2">Current Month Reading</h6>
       <div class="row g-2">
-        <div class="col-3"><input type="number" class="form-control" id="curr1" placeholder="1RK"></div>
-        <div class="col-3"><input type="number" class="form-control" id="curr2" placeholder="1BHK"></div>
-        <div class="col-3"><input type="number" class="form-control" id="curr3" placeholder="Common"></div>
-        <div class="col-3"><input type="number" class="form-control" id="curr4" placeholder="1st Floor"></div>
+        <div class="col-3">
+          <label class="form-label">1RK</label>
+          <input type="number" class="form-control" id="curr1" placeholder="1RK">
+        </div>
+        <div class="col-3">
+          <label class="form-label">1BHK</label>
+          <input type="number" class="form-control" id="curr2" placeholder="1BHK">
+        </div>
+        <div class="col-3">
+          <label class="form-label">Common</label>
+          <input type="number" class="form-control" id="curr3" placeholder="Common">
+        </div>
+        <div class="col-3">
+          <label class="form-label">1st Floor</label>
+          <input type="number" class="form-control" id="curr4" placeholder="1st Floor">
+        </div>
       </div>
       <div class="mt-3">
         <button type="submit" class="btn btn-primary w-100 btn-sm">Calculate Bill</button>
@@ -80,26 +124,13 @@
   <script>
     // Labels used for display
     const PAYER_LABELS = ["1RK", "1BHK", "1st Floor"];
-
-    // Slabs: 0–100 @ ₹5; 101–300 @ ₹11; 301–500 @ ₹15
-    const SLABS = [
-      { limit: 100, rate: 5 },
-      { limit: 300, rate: 11 },
-      { limit: 500, rate: 15 }
-    ];
-
-    const otherCharges = {
-      fixedCharges: +document.getElementById("fixedCharges").value,
-      wheelingChargesPerUnit: +document.getElementById("wheelingChargesPerUnit").value, // its per Unit
-      electricityDutyInPercent: +document.getElementById("electricityDutyInPercent").value // in percentage
-    }
-    console.log("otherCharges:", otherCharges);
-
+    // Other Charges
+    let otherCharges = {}
     // Robust equal-per-slab allocator (never produces negative allocations)
-    function splitBillEqualAllocation(units, slabs, fixedChargesShare) {
-      const n = units.length;
+    function splitBillEqualAllocation(units, slabs, fixedChargesShare, minusAmountShare) {
+      const unitsLength = units.length;
       let remaining = units.slice();                 // remaining units per meter
-      let perMeterCost = Array(n).fill(0);
+      let perMeterCost = Array(unitsLength).fill(0);
       let totalBill = 0;
       const breakdown = [];
       let prevLimit = 0;
@@ -111,12 +142,12 @@
         const capacity = Math.min(slab.limit - prevLimit, totalRem);
         if (capacity <= 0) { prevLimit = slab.limit; continue; }
 
-        const alloc = Array(n).fill(0);
-        const costs = Array(n).fill(0);
+        const allocatedUnitsFromSlab = Array(unitsLength).fill(0);
+        const costs = Array(unitsLength).fill(0);
 
         // active meters are those with >0 remaining
         let active = [];
-        for (let i = 0; i < n; i++) if (remaining[i] > 1e-9) active.push(i);
+        for (let i = 0; i < unitsLength; i++) if (remaining[i] > 1e-9) active.push(i);
 
         let left = capacity;
         while (left > 1e-9 && active.length > 0) {
@@ -124,59 +155,70 @@
           for (let i = active.length - 1; i >= 0; i--) {
             const idx = active[i];
             const take = Math.min(remaining[idx], share);
-            alloc[idx] += take;
+            allocatedUnitsFromSlab[idx] += take;
             remaining[idx] -= take;
             left -= take;
             if (remaining[idx] <= 1e-9) active.splice(i, 1);
           }
         }
+        // console.log("allocatedUnitsFromSlab:" + allocatedUnitsFromSlab);
 
-        for (let i = 0; i < n; i++) {
-          costs[i] = alloc[i] * slab.rate;
+        for (let i = 0; i < unitsLength; i++) {
+          costs[i] = Math.round(allocatedUnitsFromSlab[i] * slab.rate);
           perMeterCost[i] += costs[i];
-          totalBill += costs[i];
+          // totalBill += costs[i];
         }
-        console.log("costs:" + costs);
+
+        //
         breakdown.push({
           slab: `${prevLimit + 1}–${slab.limit}`,
           rate: slab.rate,
-          units: alloc.map(v => +v.toFixed(2)),
-          cost: costs.map(v => +v.toFixed(2))
+          units: allocatedUnitsFromSlab.map(v => +v.toFixed(0)),
+          cost: costs.map(v => +v.toFixed(0))
         });
 
         prevLimit = slab.limit;
       }
-
       console.log("perMeterCost:" + JSON.stringify(perMeterCost));
-      console.log("totalBill:" + totalBill);
 
-      // Add FCH - fixed charges share, WC- wheeling charges for each meter
-      const perMeterCostWithFCHWC = perMeterCost.map((item, index) => {        
-        const total = item + fixedChargesShare + (units[index] * otherCharges.wheelingChargesPerUnit);                
+      // Add WC- wheeling charges for each meter
+      const perMeterCostWithWC = perMeterCost.map((item, index) => {
+        const total = item + (units[index] * otherCharges.wheelingChargesPerUnit);
         return Math.round(total);
       });
+      console.log("perMeterCostWithWC:" + perMeterCostWithWC);
 
-      console.log("perMeterCostWithFCHWC:" + perMeterCostWithFCHWC);
-
-      // add electricity duty on total bill for each meter
-      const finalPerMeterCost = perMeterCostWithFCHWC.map(item => {
+      // Add ED - add electricity duty for each meter, add FCH - fixed charges share
+      const perMeterCostWithEDFCH = perMeterCostWithWC.map(item => {
         const electricityDutyInPercent = item * (otherCharges.electricityDutyInPercent / 100);
-        return Math.round(item + electricityDutyInPercent);
+        console.log("electricityDutyInPercent:", electricityDutyInPercent);
+        return Math.round(item + electricityDutyInPercent + fixedChargesShare) - minusAmountShare;
       });
+      console.log("perMeterCostWithEDFCH:" + perMeterCostWithEDFCH);
 
-      console.log("finalPerMeterCost:" + finalPerMeterCost);
+      // Round rupees per meter; adjust last to keep exact total      
+      totalBill = perMeterCostWithEDFCH.reduce((a, b) => a + b, 0);      
+      console.log("totalBill:", totalBill);
 
-
-      // Round rupees per meter; adjust last to keep exact total
-      const rounded = finalPerMeterCost.map(v => Math.round(v));
-      const diff = Math.round(totalBill) - rounded.reduce((a, b) => a + b, 0);
-      if (rounded.length) rounded[rounded.length - 1] += diff;
-
-      return { perMeterCostWithFCHWC, perMeter: rounded, totalBill: Math.round(totalBill), breakdown };
+      return { perMeterCostWithWC, finalPerMeterCost: perMeterCostWithEDFCH, totalBill, breakdown };
     }
 
     document.getElementById("billForm").addEventListener("submit", function (e) {
       e.preventDefault();
+
+      // Slabs: 0–100 @ ₹5; 101–300 @ ₹11; 301–500 @ ₹15
+      const SLABS = [
+        { limit: 100, rate: +document.getElementById("slab1").value },
+        { limit: 300, rate: +document.getElementById("slab2").value },
+        { limit: 500, rate: +document.getElementById("slab3").value }
+      ];
+
+      // Other Charges
+      otherCharges = {
+        fixedCharges: +document.getElementById("fixedCharges").value,
+        wheelingChargesPerUnit: +document.getElementById("wheelingChargesPerUnit").value, // its per Unit
+        electricityDutyInPercent: +document.getElementById("electricityDutyInPercent").value // in percentage
+      }
 
       // Read last & current
       const last = [
@@ -185,7 +227,7 @@
         +document.getElementById("last3").value || 0,
         +document.getElementById("last4").value || 0
       ];
-      const curr = [
+      const current = [
         +document.getElementById("curr1").value || 0,
         +document.getElementById("curr2").value || 0,
         +document.getElementById("curr3").value || 0,
@@ -193,56 +235,67 @@
       ];
 
       // mock data for dev debugging
+      // const SLABS = [
+      //   { limit: 100, rate: 4.23 },
+      //   { limit: 300, rate: 11 },
+      //   { limit: 500, rate: 15.28 }
+      // ];      
+
       // const last = [
       //   521,
       //   323,
       //   802,
       //   0
       // ];
-      // const curr = [
+      // const current = [
       //   605,
       //   373,
       //   890,
       //   131
       // ];
 
+      // otherCharges = {
+      //   fixedCharges: 140,
+      //   wheelingChargesPerUnit: 1.47, // its per Unit
+      //   electricityDutyInPercent: 16 // in percentage
+      // }
+      console.log("SLABS:", SLABS);
+      console.log("otherCharges:", otherCharges);
+
+      // 
+      const minusAmount = +document.getElementById("minusAmount").value || 0;
+
       // Monthly consumption = max(0, current - last), avoids negatives
       let hadNeg = false;
-      const cons = curr.map((c, i) => {
+      const unitsConsumed = current.map((c, i) => {
         const d = c - last[i];
         if (d < 0) hadNeg = true;
         return Math.max(0, d);
       });
-      console.log("cons:", cons);
+      console.log("unitsConsumed:", unitsConsumed);
 
       // fixed charges split into the three paying meters (as units, before slab billing)
-      const fixedChargesShare = otherCharges.fixedCharges / 3;
+      const fixedChargesShare = Math.round(otherCharges.fixedCharges / 3);
       console.log("fixedChargesShare:", fixedChargesShare);
 
+      // Minus amount that will split into the three paying meters (as units, before slab billing)
+      const minusAmountShare = Math.round(minusAmount / 3);
+      console.log("minusAmountShare:", minusAmountShare);
+
       // Common split into the three paying meters (as units, before slab billing)
-      const commonShare = cons[2] / 3;
+      const commonShare = Math.round(unitsConsumed[2] / 3);
       const payUnits = [
-        cons[0] + commonShare,  // 1RK
-        cons[1] + commonShare,  // 1BHK
-        cons[3] + commonShare   // 1st Floor
+        unitsConsumed[0] + commonShare,  // 1RK
+        unitsConsumed[1] + commonShare,  // 1BHK
+        unitsConsumed[3] + commonShare   // 1st Floor
       ];
 
       // Total consumed units
-      const totalUnits = payUnits.reduce((a, b) => a + b, 0).toFixed(2);
+      const totalUnits = payUnits.reduce((a, b) => a + b, 0).toFixed(0);
       console.log("totalUnits:", totalUnits);
-      const wheelingCharges = totalUnits * otherCharges.wheelingChargesPerUnit;
-      console.log("wheelingCharges:", wheelingCharges);
-      const wheelingChargesShare = wheelingCharges / 3;
-      console.log("wheelingChargesShare:", wheelingChargesShare);
-      const wheelingChargesSharePerMeter = [
-        wheelingChargesShare,  // 1RK
-        wheelingChargesShare,  // 1BHK
-        wheelingChargesShare   // 1st Floor
-      ];
-      console.log("wheelingChargesSharePerMeter:", wheelingChargesSharePerMeter);
 
       // Compute bill
-      const bill = splitBillEqualAllocation(payUnits, SLABS, fixedChargesShare);
+      const bill = splitBillEqualAllocation(payUnits, SLABS, fixedChargesShare, minusAmountShare);
       console.log("bill:", bill);
 
       // Top note if any negative delta was clamped
@@ -251,7 +304,7 @@
         : "";
 
       // Build Summary table (shows original, +common, final units, and bold bill)
-      const orig = [cons[0], cons[1], cons[3]];
+      const orig = [unitsConsumed[0], unitsConsumed[1], unitsConsumed[3]];
       const labels = PAYER_LABELS;
       let html = `
     <h6 class="mb-2">Bill Summary</h6>
@@ -261,26 +314,26 @@
           <th>Meter</th>
           <th>Units</th>
           <th>+ Common</th>
-          <th>Total Units</th>          
-          <th>+ Fixed Charges (₹${otherCharges.fixedCharges})</th>
+          <th>Total Units</th>                    
           <th>+ Wheeling Charges/Unit (₹${otherCharges.wheelingChargesPerUnit}/Unit)</th>          
           <th>Bill (₹)</th>
           <th>+ Electricity Duty in % (${otherCharges.electricityDutyInPercent}%) on Bill</th>
+          <th>+ Fixed Charges (₹${otherCharges.fixedCharges})</th>
           <th class="bill-bold">Final Bill (₹)</th>
         </tr>
       </thead>
       <tbody>
         ${labels.map((lab, i) => `
           <tr>
-            <td>${lab}</td>
-            <td>${orig[i].toFixed(2)}</td>
-            <td>${commonShare.toFixed(2)}</td>
-            <td>${payUnits[i].toFixed(2)}</td>
-            <td>${fixedChargesShare.toFixed(2)}</td>
-            <td>${wheelingChargesShare.toFixed(2)}</td>            
-            <td>₹${bill.perMeterCostWithFCHWC[i]}</td>
-            <td>₹${bill.perMeter[i] * (otherCharges.electricityDutyInPercent / 100)}</td>
-            <td class="bill-bold">${bill.perMeter[i]}</td>
+            <td class="bill-bold">${lab}</td>
+            <td>${orig[i]}</td>
+            <td>${commonShare}</td>
+            <td class="bill-bold">${payUnits[i]}</td>            
+            <td>${Math.round(payUnits[i] * otherCharges.wheelingChargesPerUnit)}</td>            
+            <td>₹${bill.perMeterCostWithWC[i]}</td>
+            <td>₹${Math.round(bill.perMeterCostWithWC[i] * (otherCharges.electricityDutyInPercent / 100))}</td>
+            <td>${fixedChargesShare.toFixed(0)}</td>
+            <td class="bill-bold">${bill.finalPerMeterCost[i]}</td>
           </tr>
         `).join('')}
         <tr class="table-secondary">
